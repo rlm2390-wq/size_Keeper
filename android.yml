@@ -1,0 +1,64 @@
+name: Build SizeKeeper Android APK
+
+# Builds a ready-to-install Android app every time you push to main.
+# You can also run it by hand: Actions tab > Build SizeKeeper Android APK > Run workflow.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Assemble web files into www/
+        run: |
+          rm -rf www
+          mkdir -p www
+          cp index.html sw.js manifest.json sizekeeper-privacy.html www/
+          cp -r icons www/icons
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Apply SizeKeeper Android settings
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -e
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          # Camera for "Capture Item". Not required, so phones without a camera can still install.
+          if ! grep -q "android.permission.CAMERA" "$MANIFEST"; then
+            sed -i 's#</manifest>#    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n</manifest>#' "$MANIFEST"
+          fi
+          # Every build gets a higher version number (the Play Store requires this).
+          sed -i "s/versionCode 1/versionCode ${RUN_NUMBER:-1}/" android/app/build.gradle
+          # App icons
+          cp -r android-res/res/. android/app/src/main/res/
+
+      - name: Sync web files into the Android project
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SizeKeeper-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
