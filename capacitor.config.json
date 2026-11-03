@@ -1,0 +1,9 @@
+{
+  "appId": "com.sizekeeper.app",
+  "appName": "SizeKeeper",
+  "webDir": "www",
+  "backgroundColor": "#111113",
+  "server": {
+    "androidScheme": "https"
+  }
+}
